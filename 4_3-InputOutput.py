@@ -3,3 +3,4 @@ monetary_value_str = input("Enter a monetary value (e.g., 12.3456): ")
 monetary_value = float(monetary_value_str)
 formatted_value = f"${monetary_value:.2f}"
 print("Formatted monetary value:", formatted_value)
+
