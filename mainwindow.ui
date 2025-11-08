@@ -38,18 +38,44 @@
         </property>
        </widget>
       </item>
-      <item>
-       <widget class="QPushButton" name="addButton">
-        <property name="font">
-         <font>
-          <pointsize>12</pointsize>
-         </font>
-        </property>
-        <property name="text">
-         <string>Add</string>
-        </property>
-       </widget>
-      </item>
+            <!-- Due date input: user picks a date for the todo -->
+            <item>
+             <layout class="QVBoxLayout" name="dueLayout">
+                <item>
+                 <widget class="QLabel" name="dueLabel">
+                    <property name="text">
+                     <string>Due</string>
+                    </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QDateEdit" name="dueDateEdit">
+                    <property name="calendarPopup">
+                     <bool>true</bool>
+                    </property>
+                    <property name="date">
+                     <date>
+                        <year>2025</year>
+                        <month>1</month>
+                        <day>1</day>
+                     </date>
+                    </property>
+                 </widget>
+                </item>
+             </layout>
+            </item>
+            <item>
+             <widget class="QPushButton" name="addButton">
+                <property name="font">
+                 <font>
+                    <pointsize>12</pointsize>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>Add</string>
+                </property>
+             </widget>
+            </item>
      </layout>
     </item>
     <item>
