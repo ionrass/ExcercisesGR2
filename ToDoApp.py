@@ -15,12 +15,13 @@ Comments throughout the file explain what each section and method does.
 import json
 import os
 from datetime import date
+from PyQt6.QtWidgets import QColorDialog
 
 # PyQt6 imports
 from PyQt6 import uic  # For loading the .ui file created with Qt Designer
 from PyQt6.QtCore import QAbstractListModel, Qt
-from PyQt6.QtGui import QPixmap
-from PyQt6.QtWidgets import QApplication, QMainWindow, QStyledItemDelegate
+from PyQt6.QtGui import QPixmap, QKeySequence, QAction
+from PyQt6.QtWidgets import QApplication, QMainWindow, QStyledItemDelegate, QAbstractItemView
 from PyQt6.QtGui import QColor, QFontMetrics
 from PyQt6.QtWidgets import QStyle
 
@@ -49,7 +50,7 @@ class TodoModel(QAbstractListModel):
         super().__init__()
 
         # Load existing todos or start with an empty list
-        # Each todo will be stored as: [completed(bool), text(str), due_date_iso(str|None)]
+        # Each todo will be stored as: [completed(bool), text(str), due_date_iso(str|None), color(str|None)]
         # Using list (not tuple) keeps JSON round-trippable without change.
         self.todos = self._load()
 
@@ -75,13 +76,17 @@ class TodoModel(QAbstractListModel):
                 normalized = []
                 for item in raw:
                     # If already in new shape (3 items) use as-is
-                    if isinstance(item, list) and len(item) == 3:
+                    # New shape: [status, text, due, color]
+                    if isinstance(item, list) and len(item) == 4:
                         normalized.append(item)
+                    # Older shape with due but no color: [status, text, due]
+                    elif isinstance(item, list) and len(item) == 3:
+                        normalized.append([item[0], item[1], item[2], None])
                     elif isinstance(item, list) and len(item) == 2:
-                        # convert [status, text] -> [status, text, None]
-                        normalized.append([item[0], item[1], None])
+                        # convert [status, text] -> [status, text, None, None]
+                        normalized.append([item[0], item[1], None, None])
                     elif isinstance(item, (list, tuple)) and len(item) == 2:
-                        normalized.append([item[0], item[1], None])
+                        normalized.append([item[0], item[1], None, None])
                     else:
                         # Unknown shape: skip
                         continue
@@ -127,17 +132,21 @@ class TodoModel(QAbstractListModel):
 
         row = index.row()
         try:
-            status, text, due = self.todos[row]
+            status, text, due, color = self.todos[row]
         except Exception:
             return None
-
         # Primary text shown in the list
         if role == Qt.ItemDataRole.DisplayRole:
             return text
 
-        # Expose the due date separately via UserRole so a delegate can draw it
+        # Expose the due date via UserRole so a delegate can draw it
         if role == Qt.ItemDataRole.UserRole:
             return due
+
+        # Expose color via a custom role (UserRole + 1)
+        COLOR_ROLE = int(Qt.ItemDataRole.UserRole) + 1
+        if role == COLOR_ROLE:
+            return color
 
         if role == Qt.ItemDataRole.DecorationRole and status:
             # If the item is completed and we have a tick image, return it.
@@ -146,7 +155,7 @@ class TodoModel(QAbstractListModel):
         return None
 
     # Application operations ------------------------------------------------------
-    def add(self, todo_text: str, due_iso: str | None = None):
+    def add(self, todo_text: str, due_iso: str | None = None, color: str | None = None):
         """Add a new todo with completed=False and optional due date.
 
         due_iso should be an ISO date string (YYYY-MM-DD) or None.
@@ -154,8 +163,8 @@ class TodoModel(QAbstractListModel):
         if not todo_text:
             return
 
-        # Append as a list: [status, text, due_iso]
-        self.todos.append([False, todo_text, due_iso])
+        # Append as a list: [status, text, due_iso, color]
+        self.todos.append([False, todo_text, due_iso, color])
         self._save()
 
     def delete(self, row: int):
@@ -176,8 +185,8 @@ class TodoModel(QAbstractListModel):
         Preserves the due date field.
         """
         try:
-            status, text, due = self.todos[row]
-            self.todos[row] = [not status, text, due]
+            status, text, due, color = self.todos[row]
+            self.todos[row] = [not status, text, due, color]
         except Exception:
             return
 
@@ -206,6 +215,34 @@ class MainWindow(QMainWindow):
         # Create the model and attach it to the QListView in the UI
         self.model = TodoModel()
         self.ui.todoView.setModel(self.model)
+        # Allow selecting multiple todos for bulk operations (delete, etc.)
+        try:
+            self.ui.todoView.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        except Exception:
+            # If the attribute isn't available for some reason, ignore silently
+            pass
+
+        # Ensure the todo list background is white and text is black
+        try:
+            self.ui.todoView.setStyleSheet("background-color: white; color: black;")
+        except Exception:
+            pass
+
+        # Current color chosen for new tasks (default black)
+        # User requested new todos to use black by default
+        self.current_color = "#000000"
+
+        # Wire up the color picker button (if present in the UI)
+        if hasattr(self.ui, 'colorButton'):
+            try:
+                self.ui.colorButton.pressed.connect(self._choose_color)
+            except Exception:
+                pass
+            # Set the button background initially so the current color is visible
+            try:
+                self.ui.colorButton.setStyleSheet(f"background-color: {self.current_color}")
+            except Exception:
+                pass
 
         # Set a custom delegate so we can draw the due date in red
         class TodoDelegate(QStyledItemDelegate):
@@ -246,10 +283,7 @@ class MainWindow(QMainWindow):
                 elided = fm.elidedText(text, Qt.TextElideMode.ElideRight, main_rect.width())
 
                 # Determine text colors. If selected use highlightedText color,
-                # if overdue (but not selected) use white for contrast on red bg,
-                # otherwise use the normal text color. Due date text uses same
-                # highlighted color when selected, otherwise a red/orange logic is
-                # handled in the model's ForegroundRole; we'll default to red here.
+                # if overdue (but not selected) use white for contrast on red bg.
                 if option.state & QStyle.StateFlag.State_Selected:
                     text_color = option.palette.highlightedText().color()
                     due_color = option.palette.highlightedText().color()
@@ -257,7 +291,16 @@ class MainWindow(QMainWindow):
                     text_color = QColor("white")
                     due_color = QColor("white")
                 else:
-                    text_color = option.palette.text().color()
+                    # If the model provides a color for this task use it for the
+                    # main text; otherwise use the default text color.
+                    model_color = index.data(int(Qt.ItemDataRole.UserRole) + 1)
+                    if model_color:
+                        try:
+                            text_color = QColor(model_color)
+                        except Exception:
+                            text_color = option.palette.text().color()
+                    else:
+                        text_color = option.palette.text().color()
                     due_color = QColor("red")
 
                 painter.setPen(text_color)
@@ -289,6 +332,16 @@ class MainWindow(QMainWindow):
         self.ui.deleteButton.pressed.connect(self.delete)
         self.ui.completeButton.pressed.connect(self.complete)
 
+        # Add a keyboard shortcut (Delete key) to trigger bulk delete
+        try:
+            delete_action = QAction("Delete", self)
+            delete_action.setShortcut(QKeySequence("Delete"))
+            delete_action.triggered.connect(self.delete)
+            # Add action to the window so the shortcut is active
+            self.addAction(delete_action)
+        except Exception:
+            pass
+
     # Handlers connected to the UI ------------------------------------------------
     def add(self):
         """Read text from the input field, add it to the model, and clear input."""
@@ -304,21 +357,45 @@ class MainWindow(QMainWindow):
         except Exception:
             due_iso = None
 
-        # Add the todo with the optional due date
-        self.model.add(text, due_iso)
+        # Add the todo with the optional due date and chosen color
+        self.model.add(text, due_iso, self.current_color)
 
         # Clear the text input; keep the due date (user may add many items with same date)
         self.ui.todoEdit.clear()
 
+    def _choose_color(self):
+        """Open a QColorDialog and store the chosen color as a hex string."""
+        try:
+            col = QColorDialog.getColor()
+            if col.isValid():
+                self.current_color = col.name()  # e.g. '#rrggbb'
+                # If the UI has the button, set its background so user sees choice
+                if hasattr(self.ui, 'colorButton'):
+                    try:
+                        self.ui.colorButton.setStyleSheet(f"background-color: {self.current_color}")
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
     def delete(self):
         """Delete the currently selected item in the view."""
+        # Support deleting multiple selected rows at once.
         indexes = self.ui.todoView.selectedIndexes()
         if not indexes:
             return
 
-        row = indexes[0].row()
-        self.model.delete(row)
-        # Clear the selection so the UI is consistent after deletion
+        # Collect unique row numbers, sort descending so deletion doesn't
+        # shift the indices of yet-to-be-deleted items.
+        rows = sorted({idx.row() for idx in indexes}, reverse=True)
+        for row in rows:
+            try:
+                self.model.delete(row)
+            except Exception:
+                # ignore any invalid row errors and continue
+                pass
+
+        # Clear selection to keep UI consistent after bulk deletion
         self.ui.todoView.clearSelection()
 
     def complete(self):
@@ -337,4 +414,4 @@ if __name__ == "__main__":
     app = QApplication([])
     window = MainWindow()
     window.show()
-    app.exec()
+    app.exec() 

@@ -36,23 +36,39 @@
         <property name="placeholderText">
          <string>Enter a new task...</string>
         </property>
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumHeight">
+        <number>32</number>
+       </property>
        </widget>
       </item>
             <!-- Due date input: user picks a date for the todo -->
             <item>
              <layout class="QVBoxLayout" name="dueLayout">
                 <item>
-                 <widget class="QLabel" name="dueLabel">
-                    <property name="text">
-                     <string>Due</string>
-                    </property>
-                 </widget>
-                </item>
-                <item>
                  <widget class="QDateEdit" name="dueDateEdit">
                     <property name="calendarPopup">
                      <bool>true</bool>
                     </property>
+                   <property name="font">
+                    <font>
+                     <pointsize>12</pointsize>
+                    </font>
+                   </property>
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="minimumHeight">
+                    <number>32</number>
+                   </property>
                     <property name="date">
                      <date>
                         <year>2025</year>
@@ -65,11 +81,41 @@
              </layout>
             </item>
             <item>
+             <widget class="QPushButton" name="colorButton">
+              <property name="font">
+               <font>
+                <pointsize>12</pointsize>
+               </font>
+              </property>
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="minimumHeight">
+               <number>32</number>
+              </property>
+              <property name="text">
+               <string>Color</string>
+              </property>
+             </widget>
+            </item>
+            <item>
              <widget class="QPushButton" name="addButton">
                 <property name="font">
                  <font>
                     <pointsize>12</pointsize>
                  </font>
+                </property>
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="minimumHeight">
+                 <number>32</number>
                 </property>
                 <property name="text">
                  <string>Add</string>
